@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>project4</title>
+<meta charset="utf-8">
+<meta name="viewport"
+	content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+</head>
+<body>
+	<style>
+	html,body{
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+	}		
+	</style>
+
+	<script src="js/jquery-1.9.1.js"></script>
+	<script src="js/Three.min.js"></script>
+	<script src="js/OrbitControls.js"></script>
+	<script src="js/ThreeBSP.js"></script>
+	<script src="js/Detector.js"></script>
+	<script src="js/Stats.js"></script>
+
+	<script src="js/THREEx.KeyboardState.js"></script>
+	<script src="js/THREEx.FullScreen.js"></script>
+	<script src="js/THREEx.WindowResize.js"></script>
+
+	<!-- people -->
+	<script src="people/js/three.js"></script>
+	<script src="people/js/DDSLoader.js"></script>
+	<script src="people/js/MTLLoader.js"></script>
+	<script src="people/js/OBJLoader.js"></script>
+<!-- 	<script src="people/js/Detector.js"></script> -->
+	<script src="people/js/stats.min.js"></script>
+	<script src="people/js/PathControls.js"></script>
+<!-- 	<script src="people/js/Tween.js"></script> -->
+	<script src="people/js/RequestAnimationFrame.js"></script>
+	<script src="me/js/works/sprite.js"></script>
+	<script src="me/js/works/layout4.js"></script>
+	<script src="me/js/works/astar.js"></script>
+
+	<!-- ------------------------------------------------------------ -->
+
+	<div  id="canvas-dom-2"></div>
+	<div class="view" style="position: absolute;left: 50px;top:50px;width: 500px;height: 100px;font-size: 30px;color: #eee;">请选择起始点和目标点</div>
+
+
+
+
+	<script>
+
+            // 设置全局变量
+            var scene, camera, renderer, controls,tween,door; 
+            var mainCanvas;
+            // var keyboard = new THREEx.KeyboardState();//保持键盘的当前状态，可以随时查询
+            var clock = new THREE.Clock();
+        	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+           //var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
+        	var VIEW_ANGLE = 75, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 100000;
+        	var WALL_POSITION_Y = 150;
+var WALL_HEIGHT = 355;
+var WALL_WIDTH = 10;
+var WALL_LENGTH = 800;
+var TV_WIDTH = WALL_LENGTH / 4;
+var TV_HEIGHT = WALL_HEIGHT / 3;
+var TV_THICKNESS = 5;
+var SKYBOX_HEIGHT = 0;
+var MIRROR_WIDTH = 70;
+var MIRROR_HEIGHT = 150;
+
+
+
+	var windowWidth, windowHeight;
+
+	var graph = [];
+        	var materialArrayA = [];
+        	var materialArrayB = [];
+        	var matArrayA=[];//内墙
+        	var matArrayB = [];//外墙
+            init();
+            animate();
+          
+                  
+   //1.场景         
+   function initScene(){
+	   scene = new THREE.Scene();
+   }       
+   
+   //2.相机
+   function initCamera(){
+	   camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+	   camera.position.set(0,10,18);
+	   camera.lookAt(scene.position);	
+	   camera.lookAt(0,0,0);	
+	   scene.add(camera);
+   }
+   
+   //3.渲染器
+   function initRender(){
+	   if ( Detector.webgl )
+			renderer = new THREE.WebGLRenderer( {antialias:true} );
+		else
+			renderer = new THREE.CanvasRenderer(); 
+	   //设置渲染器的大小为窗口的内宽度，也就是内容区的宽度。
+		// renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+		mainCanvas = document.getElementById("canvas-dom-2");            
+		document.body.appendChild( renderer.domElement );
+	    renderer.setClearColor(0x4682B4,1.0);	
+	    renderer.setSize(mainCanvas.offsetWidth,mainCanvas.offsetHeight);
+
+   }
+   
+   //4.事件
+   function initEvent(){
+	   THREEx.WindowResize(renderer, camera);
+	   THREEx.FullScreen.bindKey({ charCode : 'm'.charCodeAt(0) });
+   }
+   
+   //5.控制
+   function initControls(){
+	   controls = new THREE.OrbitControls( camera, renderer.domElement );
+   }
+   
+   //6.光源
+   function initLight(){
+	   // 位置不同，方向光作用于物体的面也不同，看到的物体各个面的颜色也不同	
+	    // A start, 第二个参数是光源强度
+	   	var directionalLight = new THREE.DirectionalLight( 0xffffff,1 );//模拟远处类似太阳的光源
+	   	directionalLight.position.set( 0, 100, 0).normalize();
+	   	scene.add( directionalLight );
+	   	//A end
+	   	var ambient = new THREE.AmbientLight( 0xffffff,1 ); //AmbientLight,影响整个场景的光源
+	    ambient.position.set(0,0,0);
+	    scene.add( ambient );	   	
+	    var pointlight = new THREE.PointLight(0x000000,1.5,2000);
+		scene.add(pointlight);	
+   }
+   
+ 
+     
+   //7.初始化OBJ对象
+   function initObject(){
+	   //墙纹理
+	   createWallMaterail();
+	    createFloor();
+		createLayout();
+		// createceiling();4
+   }
+
+
+   
+//初始化函数 		
+function init() 
+{
+	initScene();
+	initCamera();
+	initRender();
+	initEvent();
+	initControls();
+	initLight();
+	initGrid();
+	initObject();	
+	initContent();
+
+	// initGround();
+	renderer.clear();
+	animate();
+}
+
+function initGround() {
+	
+
+	geometry = new THREE.Geometry();
+	geometry.vertices.push(new THREE.Vector3(-12.5, 0, 0));
+	geometry.vertices.push(new THREE.Vector3(12.5, 0, 0));
+
+
+	//播放动画请注释一下内容			
+	for(var i = 0; i <= 25; i++) {
+
+		var line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+			color: 0x808080,
+			opacity: 1
+		}));
+		line.position.z = i  - 12.5;
+		line.position.y=0;
+		scene.add(line);
+
+		var line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+			color: 0x808080,
+			opacity: 1
+		}));
+		line.position.x = i - 12.5;
+		line.position.y=0;
+		line.rotation.y = 90 * Math.PI / 180;
+		scene.add(line);
+
+	}
+}
+
+
+function initGrid() {
+	var geometry = new THREE.CubeGeometry(0.8, 1,0.8);
+		var material = new THREE.MeshBasicMaterial( {color: 0xC0C0C0} );
+		for(var i=0;i<25;i++){
+			 	var nodeRow = [];
+		        graph.push(nodeRow);
+			for(var j=0;j<25;j++){
+					nodeRow.push(0);
+				}
+			}
+			//0
+			graph[0][0]=1;
+			graph[0][1]=1;
+			graph[0][4]=1;
+			graph[0][5]=1;
+			graph[0][6]=1;
+			graph[0][8]=1;
+			graph[0][9]=1;
+			graph[0][11]=1;
+			graph[0][12]=1;
+			graph[0][13]=1;
+			graph[0][14]=1;
+			graph[0][19]=1;
+			graph[0][20]=1;
+			graph[0][23]=1;
+			graph[0][24]=1;
+
+			//1
+			graph[1][0]=1;
+			graph[1][1]=1;
+			graph[1][4]=1;
+			graph[1][5]=1;
+			graph[1][6]=1;
+			graph[1][8]=1;
+			graph[1][9]=1;
+			graph[1][11]=1;
+			graph[1][12]=1;
+			graph[1][13]=1;
+			graph[1][14]=1;
+			graph[1][19]=1;
+			graph[1][20]=1;
+			graph[1][23]=1;
+			graph[1][24]=1;
+			//2
+			graph[2][1]=1;
+			graph[2][5]=1;
+			graph[2][9]=1;
+			graph[2][13]=1;
+			graph[2][20]=1;
+			graph[2][23]=1;
+			//3
+			graph[3][0]=1;
+			graph[3][1]=1;
+			graph[3][2]=1;
+			graph[3][3]=1;
+			graph[3][4]=1;
+			graph[3][5]=1;
+			graph[3][6]=1;
+			graph[3][7]=1;
+			graph[3][8]=1;
+			graph[3][9]=1;
+			graph[3][10]=1;
+			graph[3][11]=1;
+			graph[3][12]=1;
+			graph[3][13]=1;
+			graph[3][14]=1;
+			graph[3][15]=1;
+			graph[3][16]=1;
+			graph[3][17]=1;
+			graph[3][18]=1;
+			graph[3][19]=1;
+			graph[3][20]=1;
+			graph[3][21]=1;
+			graph[3][22]=1;
+			graph[3][23]=1;
+			graph[3][24]=1;
+		//4
+			graph[4][5]=1;
+			graph[4][8]=1;
+			graph[4][12]=1;
+			graph[4][22]=1;
+			graph[4][23]=1;
+			graph[4][24]=1;
+			//5
+			graph[5][4]=1;
+			graph[5][5]=1;
+			graph[5][8]=1;
+			graph[5][7]=1;
+			graph[5][12]=1;
+			graph[5][13]=1;
+			graph[5][14]=1;
+			graph[5][22]=1;
+			//6
+			graph[6][10]=1;
+			graph[6][12]=1;
+			graph[6][14]=1;
+			graph[6][19]=1;
+			graph[6][20]=1;
+			graph[6][21]=1;
+			graph[6][22]=1;
+			graph[6][23]=1;
+			graph[6][24]=1;
+			//7
+			graph[7][10]=1;
+			graph[7][11]=1;
+			graph[7][12]=1;
+			graph[7][22]=1;
+	
+			//8
+			graph[8][12]=1;
+			graph[8][14]=1;
+			graph[8][19]=1;
+			graph[8][20]=1;
+			graph[8][21]=1;
+			graph[8][22]=1;
+			graph[8][23]=1;
+			graph[8][24]=1;
+			//9
+			graph[9][10]=1;
+			graph[9][11]=1;
+			graph[9][12]=1;
+			graph[9][13]=1;
+			graph[9][14]=1;
+			graph[9][22]=1;
+			//10
+
+			graph[10][10]=1;
+			graph[10][12]=1;
+			graph[10][14]=1;
+			graph[10][19]=1;
+			graph[10][20]=1;
+			graph[10][21]=1;
+			graph[10][22]=1;
+			graph[10][23]=1;
+			graph[10][24]=1;
+			//11
+			graph[11][3]=1;
+			graph[11][4]=1;
+			graph[11][5]=1;
+			graph[11][7]=1;
+			graph[11][8]=1;
+			graph[11][12]=1;
+			graph[11][22]=1;
+			//12
+			graph[12][4]=1;
+			graph[12][7]=1;
+			graph[12][12]=1;
+			graph[12][14]=1;
+			graph[12][22]=1;
+			//13
+			graph[13][0]=1;
+			graph[13][1]=1;
+			graph[13][2]=1;
+			graph[13][3]=1;
+			graph[13][4]=1;
+			graph[13][5]=1;
+			graph[13][6]=1;
+			graph[13][7]=1;
+			graph[13][8]=1;
+			graph[13][9]=1;
+			graph[13][10]=1;
+			graph[13][11]=1;
+			graph[13][12]=1;
+			graph[13][13]=1;
+			graph[13][14]=1;
+			graph[13][16]=1;
+			graph[13][18]=1;
+			graph[13][22]=1;
+			graph[13][24]=1;
+			//14
+			graph[14][0]=1;
+			graph[14][2]=1;
+			graph[14][5]=1;
+			graph[14][9]=1;
+			graph[14][12]=1;
+			graph[14][16]=1;
+			graph[14][18]=1;
+			graph[14][22]=1;
+			graph[14][24]=1;
+			//15
+			graph[15][0]=1;
+			graph[15][2]=1;
+			graph[15][4]=1;
+			graph[15][5]=1;
+			graph[15][6]=1;
+			graph[15][8]=1;
+			graph[15][9]=1;
+			graph[15][10]=1;
+			graph[15][12]=1;
+			graph[15][13]=1;
+			graph[15][14]=1;
+			graph[15][15]=1;
+			graph[15][16]=1;
+			graph[15][17]=1;
+			graph[15][18]=1;
+			graph[15][19]=1;
+			graph[15][20]=1;
+			graph[15][21]=1;
+			graph[15][22]=1;
+			graph[15][23]=1;
+			graph[15][24]=1;
+			//16
+			graph[16][0]=1;
+			graph[16][2]=1;
+			graph[16][4]=1;
+			graph[16][5]=1;
+			graph[16][6]=1;
+			graph[16][8]=1;
+			graph[16][9]=1;
+			graph[16][10]=1;
+			graph[16][12]=1;
+			graph[16][15]=1;
+			graph[16][19]=1;
+			graph[16][23]=1;
+
+			//17
+			graph[17][2]=1;
+			graph[17][12]=1;
+			graph[17][14]=1;
+			graph[17][15]=1;
+			graph[17][16]=1;
+			graph[17][18]=1;
+			graph[17][19]=1;
+			graph[17][20]=1;
+			graph[17][22]=1;
+			graph[17][23]=1;
+			graph[17][24]=1;
+			//18
+			graph[18][2]=1;
+			graph[18][10]=1;
+			graph[18][11]=1;
+			graph[18][12]=1;
+			graph[18][14]=1;
+			graph[18][15]=1;
+			graph[18][16]=1;
+			graph[18][18]=1;
+			graph[18][19]=1;
+			graph[18][20]=1;
+			graph[18][22]=1;
+			graph[18][23]=1;
+			graph[18][24]=1;
+			//19
+			graph[19][2]=1;
+			graph[19][12]=1;
+			//20
+			graph[20][0]=1;
+			graph[20][1]=1;
+			graph[20][2]=1;
+			graph[20][3]=1;
+			graph[20][4]=1;
+			graph[20][5]=1;
+			graph[20][10]=1;
+			graph[20][11]=1;
+			graph[20][12]=1;
+			graph[20][13]=1;
+			graph[20][14]=1;
+			//21
+			graph[21][2]=1;
+			graph[21][12]=1;
+
+			//22
+			graph[22][0]=1;
+			graph[22][1]=1;
+			graph[22][2]=1;
+			graph[22][3]=1;
+			graph[22][4]=1;
+			graph[22][5]=1;
+			graph[22][6]=1;
+			graph[22][7]=1;
+			graph[22][8]=1;
+			graph[22][9]=1;
+			graph[22][10]=1;
+			graph[22][11]=1;
+			graph[22][12]=1;
+			graph[22][13]=1;
+			graph[22][14]=1;
+			//23
+			graph[23][1]=1;
+			graph[23][5]=1;
+			graph[23][8]=1;
+			graph[23][14]=1;
+
+			//24
+			graph[24][0]=1;
+			graph[24][1]=1;
+			graph[24][2]=1;
+			graph[24][4]=1;
+			graph[24][5]=1;
+			graph[24][7]=1;
+			graph[24][8]=1;
+			graph[24][9]=1;
+			graph[24][10]=1;
+			graph[24][13]=1;
+			graph[24][14]=1;
+			
+
+		// 	for (var i = 0; i<25 ; i++) {
+		// 		for(var j=0;j<25;j++)
+		// 		{		
+		// 				if(graph[i][j]==0){			
+		// 				var cube = new THREE.Mesh( geometry, material );
+		// 				cube.position.set(j-12,0.1,i-12);
+		// 				scene.add(cube);
+		// 				}
+		// 		}
+		// 	}
+		// console.log(graph);
+		
+}
+
+    var resultArray=new Array();
+     
+	
+	function pickupObjects(e){
+		
+      var raycaster= new THREE.Raycaster();
+		     let mouse = new THREE.Vector2();
+	          var fxl=new THREE.Vector3(0,1,0); 
+	          var groundplane=new THREE.Plane(fxl,0);
+	          mouse.x = (e.clientX/window.innerWidth)*2 -1;
+	          mouse.y = -(e.clientY/window.innerHeight)*2 + 1;
+	          //从相机发射一条射线，经过鼠标点击位置
+	          raycaster.setFromCamera(mouse,camera);
+	          //计算射线相机到的对象，可能有多个对象，因此返回的是一个数组，按离相机远近排
+	          var ray=raycaster.ray;
+	          let intersects = ray.intersectPlane(groundplane);
+	          let x=intersects.x;
+	          let z=intersects.z;
+
+
+
+
+
+	          console.log("射线="+x+' '+z);
+
+	          if(Math.abs(x)>12||Math.abs(z)>12){
+	          	return;
+	          }   
+
+	          var k,m;
+                    for(var i=-12;i<12;i++){
+                    	if(x>=i&&x<i+1){
+                    		k=i;
+                    	}
+                    }
+                    for(var j=-12;j<12;j++){
+                    	if(z>=j&&z<j+1){
+                    		m=j;
+                    	}
+                    }
+
+              initSphere(k,m);     
+	}
+	document.addEventListener('click',pickupObjects,false);
+	var isCaculate=false;
+	function cleanSphere(){
+		let child=scene.children;
+            for(var i=0;i<child.length;i++){
+            	if(child[i].geometry instanceof THREE.SphereGeometry){
+            		scene.remove(child[i]);
+            		i--;
+            	}
+            }
+			isCaculate=false;
+	}
+
+
+	function initSphere(x,z){
+		if(isCaculate){
+			cleanSphere();  
+		}
+		var geometry = new THREE.SphereGeometry( 0.2,8,8);
+		var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+
+		if(resultArray.length==0){
+            var sphere = new THREE.Mesh( geometry, material );
+           
+			sphere.position.x=x;
+			sphere.position.y=0.5;
+			sphere.position.z=z;
+			resultArray.push(sphere);
+			scene.add( sphere );
+		}else if(resultArray[0].position.x!=x&&resultArray[0].position.z!=z){
+			var sphere = new THREE.Mesh( geometry, material );
+			sphere.position.x=x;
+			sphere.position.y=0.5;
+			sphere.position.z=z;
+			resultArray.push(sphere);
+			scene.add( sphere );
+			caculatePath(resultArray);
+			isCaculate=true;
+			console.log("起始点坐标为  x:"+resultArray[0].position.x+",z:"+resultArray[0].position.z);
+			console.log("终止点坐标为  x:"+resultArray[1].position.x+",z:"+resultArray[1].position.z);
+			resultArray=new Array();
+		}
+
+	}
+var result;
+function caculatePath(resultArray){
+		//console.log(resultArray);
+		var maps = new Graph(graph);
+		var startX=(resultArray[0].position.z)+12;
+		var startY=(resultArray[0].position.x)+12;
+		var endX=(resultArray[1].position.z)+12;
+		var endY=(resultArray[1].position.x)+12;
+		console.log(startX+' '+startY+' '+endX+' '+endY);
+	    var start = maps.grid[startX][startY];
+	    var end = maps.grid[endX][endY];
+	    result = astar.search(maps, start, end);
+	    if(result.length==0){
+	    	alert("无可到达路径");
+	    	cleanSphere(); 
+	    	return;
+	    }
+        timesRun = 0;
+		tempSphere = resultArray[0];
+	    pathAnimate();
+
+		
+	}
+
+var timesRun = 0;
+var tempSphere;
+var isAdded=false;
+function pathAnimate(){
+	var geometry = new THREE.SphereGeometry( 0.2,8,8);
+	var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+	 var sphereCopy=new THREE.Mesh( geometry, material );
+	if(!isAdded){
+		scene.add(tempSphere);
+		isAdded=true;
+	}
+	if(timesRun==result.length){
+		return;
+	}
+	var next={
+	    x:result[timesRun].y-12,
+	    z:result[timesRun].x-12
+	}
+	if(tempSphere.position.x==next.x&&tempSphere.position.z==next.z){
+	    timesRun++;
+	    requestAnimationFrame(pathAnimate);  
+	    return;
+	}
+	// if(tempSphere.position.x>next.x){
+	// 	tempSphere.position.x-=1;
+	// }
+	// if(tempSphere.position.x<next.x)
+	// 	{
+	// 		tempSphere.position.x+=1;
+	// 	}
+	// if(tempSphere.position.z>next.z)
+	// 	{
+	// 		tempSphere.position.z-=1;
+	// 	}
+	// if(tempSphere.position.z<next.z){
+	// 	tempSphere.position.z+=1;
+	// }
+	// requestAnimationFrame(pathAnimate);
+	sphereCopy.position.set(tempSphere.position.x,0.5,tempSphere.position.z);
+	scene.add(sphereCopy);
+	if(tempSphere.position.x>next.x)
+		{
+			tempSphere.position.x-=1;
+		}
+	if(tempSphere.position.x<next.x)
+		{
+			tempSphere.position.x+=1;
+		}
+	if(tempSphere.position.z>next.z)
+		{
+			tempSphere.position.z-=1;
+		}
+	if(tempSphere.position.z<next.z)
+		{
+			tempSphere.position.z+=1;
+		}
+	
+	console.log("路径："+tempSphere.position.x+"   "+tempSphere.position.z)
+	requestAnimationFrame(pathAnimate);  
+}
+
+function updateSize() {
+	if(windowWidth != window.innerWidth || windowHeight != window.innerHeight) {
+		windowWidth = window.innerWidth;
+		windowHeight = window.innerHeight;
+		renderer.setSize(windowWidth, windowHeight);
+	}
+}
+
+function animate() {
+
+	render();
+	controls.update();
+	requestAnimationFrame(animate);
+}
+
+function render() {
+	updateSize();
+	renderer.render(scene, camera);
+}
+
+
+</script>
+</body>
+</html>
